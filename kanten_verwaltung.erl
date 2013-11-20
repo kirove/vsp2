@@ -34,8 +34,8 @@ start_kanten_verwaltung(LoggingPID) ->
 
 
   % setUp EdgeList,  new NewEdgeList contains NodePID now
-  timer:sleep(1000),
-  NewEdgeList = setUpEdgeList(EdgeList, []),
+  timer:sleep(3000),
+  NewEdgeList = setUpEdgeList(EdgeList, [], LoggingPID),
   InBranchEdge = undifined,
   BestEdge = undifined,
   BestWeight = undifined,
@@ -155,7 +155,7 @@ getMinEdge([]) ->
   {undefined, undefined}
 ;
 
-  % startcall with only one list as an argument
+% startcall with only one list as an argument
 getMinEdge([{EdgeId, NodePID, State}| Tail]) ->
   getMinEdge(Tail, {EdgeId, NodePID, State}).
 
@@ -163,12 +163,12 @@ getMinEdge([], MinElem) ->
   {EdgeId, NodePID, _} = MinElem,
   {EdgeId, NodePID};
 
- % main recursion
+% main recursion
 getMinEdge([{EdgeId, NodePID, State}| Tail], {LowestEdgeId, NodePIDofLowestEdge, StateOfLowestEdge}) ->
   if
     EdgeId < LowestEdgeId ->
       getMinEdge(Tail, {EdgeId, NodePID, State});
-    %EdgeId >=  LowestEdgeId: no smaller id found, no change needed,
+  %EdgeId >=  LowestEdgeId: no smaller id found, no change needed,
     true ->
       getMinEdge(Tail, {LowestEdgeId, NodePIDofLowestEdge, StateOfLowestEdge})
   end
@@ -176,14 +176,19 @@ getMinEdge([{EdgeId, NodePID, State}| Tail], {LowestEdgeId, NodePIDofLowestEdge,
 
 
 % gets the PID for every service
-setUpEdgeList([], NewEdgeList) ->
+setUpEdgeList([], NewEdgeList, LoggingPID) ->
   NewEdgeList;
 
-setUpEdgeList([{EdgeName, ServiceName} | Tail], NewEdgeList) ->
+setUpEdgeList([{EdgeName, ServiceName} | Tail], NewEdgeList, LoggingPID) ->
 
-
+  LoggingPID ! {output, atom_to_list(ServiceName)},
   NodePID = global:whereis_name(ServiceName),
 
-  setUpEdgeList(Tail, [{EdgeName, NodePID, basic}| NewEdgeList])
+  timer:sleep(1000),
+  LoggingPID ! {output, pid_to_list(NodePID)},
+  LoggingPID ! {output, integer_to_list(EdgeName)},
+
+
+  setUpEdgeList(Tail, [{EdgeName, NodePID, basic}| NewEdgeList], LoggingPID)
 .
 

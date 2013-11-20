@@ -40,7 +40,6 @@ start() ->
 
   % sleep, take time to start the other nodes
   timer:sleep(StartUpTime),
-  KnotenPID = self(),
   % start knoten_zustand process
   Knoten_zustandPID = spawn(fun() -> start_knoten_zustand(LoggingPID) end),
 
@@ -49,7 +48,6 @@ start() ->
 
 
   LoggingPID ! {pid, ["Knoten", self()]},
-  LoggingPID ! {pid, ["Knoten", KnotenPID]},
   LoggingPID ! {pid, ["Logging", LoggingPID]},
   LoggingPID ! {pid, ["Kanten Verwaltung", Kanten_verwaltungPID]},
   LoggingPID ! {pid, ["Knoten Zustand", Knoten_zustandPID]},
@@ -68,7 +66,7 @@ start() ->
 
 %node sits in waitingRoom after node initiation until received a message or WakeUpTimer timed out
 waitingRoom(WakeUpTimer, Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
-  LoggingPID ! {output, "in WatingRoom..."},
+  LoggingPID ! {output_knoten, "in WatingRoom..."},
   receive
     {connect, InboundLevel, Edge} ->
       LoggingPID ! {output_receive, "in WatingRoom -> connect..."},
