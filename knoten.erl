@@ -16,6 +16,30 @@
 -import(kanten_verwaltung, [start_kanten_verwaltung/1]).
 -import(logging, [start/1]).
 
+-include_lib("Datastructure.hrl").
+
+%% -record(node, {
+%%   name,
+%%   state = sleeping,
+%%   find_count = undefined,
+%%   fragment_id = undefined,
+%%   level = undefined
+%% }).
+%%
+%% -record(edge_mangment, {
+%%   edge_list,
+%%   in_branch_edge = undefined,
+%%   best_edge = undefined,
+%%   best_weight = undefined,
+%%   test_edge = undefined
+%% }).
+%%
+%% -record(edge, {
+%%   weight_id,
+%%   node_pid,
+%%   state = basic
+%% }).
+
 
 
 start() ->
@@ -24,15 +48,24 @@ start() ->
   {ok, ConfigListe} = file:consult("node.cfg"),
   {ok, NodeName} = get_config_value(nodename, ConfigListe),
   {ok, StartUpTime} = get_config_value(startuptime, ConfigListe),
+  {ok, EdgeList} = get_config_value(edgeList, ConfigListe),
+  {ok, NodeEnvironmentList} = file:consult("hosts"),
 
-  io:format("nodename: ~s~n", [NodeName]),
+
   % LogFile
-  {ok, ServerHostname} = inet:gethostname(),
+  {ok, LoggingHost} = inet:gethostname(),
   % creates filename for the flogging file (append, like string-append)
-  ServerLogFileName = lists:append(["Node", ServerHostname, ".log"]),
+  ServerLogFileName = lists:append(["Node", LoggingHost, ".log"]),
   % start logging module
   LoggingPID = spawn(fun() -> logging:start(ServerLogFileName) end),
   LoggingPID ! {start},
+
+
+  % ping all NodeHosts
+  SuccessfullyPingedHostList = net_adm:world_list(NodeEnvironmentList),
+
+  LoggingPID ! {list, "NodeEnvironmentList", NodeEnvironmentList},
+  LoggingPID ! {list, "SuccessfullyPingedHostList", SuccessfullyPingedHostList},
 
   % Register the node.
   % node gets registered as the alias
@@ -40,55 +73,76 @@ start() ->
 
   % sleep, take time to start the other nodes
   timer:sleep(StartUpTime),
-  % start knoten_zustand process
-  Knoten_zustandPID = spawn(fun() -> start_knoten_zustand(LoggingPID) end),
-
-  % start kanten_verwaltung process
-  Kanten_verwaltungPID = spawn(fun() -> start_kanten_verwaltung(LoggingPID) end),
 
 
   LoggingPID ! {pid, ["Knoten", self()]},
-  LoggingPID ! {pid, ["Logging", LoggingPID]},
-  LoggingPID ! {pid, ["Kanten Verwaltung", Kanten_verwaltungPID]},
-  LoggingPID ! {pid, ["Knoten Zustand", Knoten_zustandPID]},
-
 
   % RandomTime in Seconds
-  RandomTimeSeconds = random:uniform(10),
+  RandomTimeSeconds = random:uniform(15),
 
   % Start wakeup-Timer for node
-  {_, WakeUpTimer} = timer:apply_after(timer:seconds(RandomTimeSeconds), knoten, wakeUp, [Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID]),
+  {_, WakeUpTimer} = timer:send_after(timer:seconds(RandomTimeSeconds), self(), {wake_up_msg}),
 
+  NodeStates = #node{
+    name = NodeName,
+    state = sleeping,
+    find_count = undefined,
+    fragment_id = undefined,
+    level = undefined
+  },
+
+  EdgeListRecord = setUpEdgeList(EdgeList, []),
+
+
+  EdgeManagement = #edge_management, {
+    edge_list = EdgeListRecord,
+    in_branch_edge = undefined,
+    best_edge = undefined,
+    best_weight = undefined,
+    test_edge = undefined
+  },
 
   % start mainLoop
-  waitingRoom(WakeUpTimer, Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
-.
-
-%node sits in waitingRoom after node initiation until received a message or WakeUpTimer timed out
-waitingRoom(WakeUpTimer, Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
-  LoggingPID ! {output_knoten, "in WatingRoom..."},
-  receive
-    {connect, InboundLevel, Edge} ->
-      LoggingPID ! {output_receive, "in WatingRoom -> connect..."},
-      timer:cancel(WakeUpTimer),
-      wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID),
-      self() ! {connect, InboundLevel, Edge},
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
-
-    {test, Level, FragmentID, Edge} ->
-      LoggingPID ! {output_receive, "in WatingRoom -> test..."},
-      timer:cancel(WakeUpTimer),
-      wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID),
-      self() ! {test, Level, FragmentID, Edge},
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
-  end
+  mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID)
 .
 
 
-mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
+mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
   receive
+  %message send by timer
+    {wake_up_msg} ->
+      Knoten_zustandPID ! {get_node_state, self()},
+      receive
+        {node_state, NodeState} ->
+          if
+          % wakeup muss aufgerufen werden wenn knoten noch am schlafen ist
+            NodeState == sleeping ->
+              wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+          % Nodestate != sleeping
+            true ->
+              ok
+          end
+
+      end;
+
+
     {connect, InboundLevel, Edge} ->
       LoggingPID ! {output_receive, "in mainLoop -> connect..."},
+
+      Knoten_zustandPID ! {get_node_state, self()},
+      receive
+        {node_state, NodeState} ->
+          if
+          % wakeup muss aufgerufen werden wenn knoten noch am schlafen ist
+            NodeState == sleeping ->
+              timer:cancel(WakeUpTimer),
+              wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+          % Nodestate != sleeping
+            true ->
+              ok
+          end
+
+      end,
       Knoten_zustandPID ! {get_level, self()},
       receive
         {node_level, NodeLevel} ->
@@ -104,7 +158,7 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
               LoggingPID ! {output_receive, "in mainLoop -> connect/fragment_id..."},
               Knoten_zustandPID ! {get_node_state, self()},
               receive
-                {node_state, NodeState} ->
+                {node_state, NodeState2} ->
                   LoggingPID ! {output_receive, "in mainLoop -> connect/fragment_id/node_state..."},
                   {EdgeWeight_ID, _} = Edge,
                   Kanten_verwaltungPID ! {get_edge, EdgeWeight_ID, self()},
@@ -112,9 +166,9 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
                     {edge, WantedEdge} ->
                       LoggingPID ! {output_receive, "in mainLoop -> connect/fragment_id/node_state/edge..."},
                       {_, WantedNodePID} = WantedEdge,
-                      WantedNodePID ! {initiate, NodeLevel, FragmentID, NodeState, WantedEdge},
+                      WantedNodePID ! {initiate, NodeLevel, FragmentID, NodeState2, WantedEdge},
                       if
-                        NodeState == find ->
+                        NodeState2 == find ->
                           Knoten_zustandPID ! {find_count_plus_one};
                         true ->
                           ok
@@ -151,7 +205,7 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
               end
           end
       end,
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID);
 
 
     {initiate, InboundNodeLevel, InboundFragmentId, InboundState, Edge} ->
@@ -183,95 +237,103 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
               test(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
           end
       end,
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID);
 
 
     {test, InboundLevel, InboundFragmentID, Edge} ->
       LoggingPID ! {output_receive, "in mainLoop -> test..."},
+
       Knoten_zustandPID ! {get_node_state, self()},
       receive
         {node_state, NodeState} ->
-          LoggingPID ! {output_receive, "in mainLoop -> test/node_state..."},
+          ok
+      end,
+      if
+      % wakeup muss aufgerufen werden wenn knoten noch am schlafen ist
+        NodeState == sleeping ->
+          timer:cancel(WakeUpTimer),
+          wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      % NodeState != sleeping
+        true ->
+          ok
+      end,
+      Knoten_zustandPID ! {get_level, self()},
+      receive
+        {node_level, NodeLevel} ->
+          LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level..."},
+          ok
+      end,
+
+      if
+        InboundLevel > NodeLevel ->
+          self() ! {test, InboundLevel, InboundFragmentID, Edge};
+
+      %InboundLevel <= NodeLevel
+        true ->
+          Knoten_zustandPID ! {get_fragment_id, self()},
+          receive
+            {fragment_id, FragmentID} ->
+              LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id..."},
+              ok
+          end,
           if
-            NodeState == sleeping ->
-              wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
-
-          % NodeState != sleeping
-            true ->
-              Knoten_zustandPID ! {get_level, self()},
+            not InboundFragmentID == FragmentID ->
+              {EdgeWeight_ID, _} = Edge,
+              Kanten_verwaltungPID ! {get_edge, EdgeWeight_ID, self()},
               receive
-                {node_level, NodeLevel} ->
-                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level..."},
-                  if
-                    InboundLevel > NodeLevel ->
-                      self() ! {test, InboundLevel, InboundFragmentID, Edge};
+                {edge, WantedEdge} ->
+                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge..."},
+                  ok
+              end,
+              {_, WantedNodePID} = WantedEdge,
+              WantedNodePID ! {accept, Edge};
 
-                  %InboundLevel <= NodeLevel
-                    true ->
-                      Knoten_zustandPID ! {get_fragment_id, self()},
-                      receive
-                        {fragment_id, FragmentID} ->
-                          LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id..."},
-                          if
-                            not InboundFragmentID == FragmentID ->
-                              {EdgeWeight_ID, _} = Edge,
-                              Kanten_verwaltungPID ! {get_edge, EdgeWeight_ID, self()},
-                              receive
-                                {edge, WantedEdge} ->
-                                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge..."},
-                                  {_, WantedNodePID} = WantedEdge,
-                                  WantedNodePID ! {accept, Edge}
-                              end;
+          %  InboundFragmentID == FragmentID
+            true ->
+              Kanten_verwaltungPID ! {get_edge_state, Edge, self()},
+              receive
+                {edge_state, EdgeState} ->
+                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge_state..."},
+                  ok
+              end,
+              if
+                EdgeState == basic ->
+                  Kanten_verwaltungPID ! {set_edge_to, rejected, Edge};
 
-                          %  InboundFragmentID == FragmentID
-                            true ->
-                              Kanten_verwaltungPID ! {get_edge_state, Edge, self()},
-                              receive
-                                {edge_state, EdgeState} ->
-                                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge_state..."},
-                                  if
-                                    EdgeState == basic ->
-                                      Kanten_verwaltungPID ! {set_edge_to, rejected, Edge};
+              % EdgeState != basic
+                true ->
+                  ok
 
-                                  % EdgeState != basic
-                                    true ->
-                                      ok
+              end,
+              Kanten_verwaltungPID ! {get_test_edge, self()},
+              receive
+                {test_edge, TestEdge} ->
+                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge_state/test_edge..."},
+                  ok
+              end,
 
-                                  end,
-                                  Kanten_verwaltungPID ! {get_test_edge, self()},
-                                  receive
-                                    {test_edge, TestEdge} ->
-                                      LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge_state/test_edge..."},
-                                      {EdgeWeight_ID, _} = Edge,
-                                      Kanten_verwaltungPID ! {get_edge, EdgeWeight_ID, self()},
-                                      receive
-                                        {edge, WantedEdge} ->
-                                          LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge_state/test_edge/edge..."},
-                                          {_, WantedNodePID} = WantedEdge,
-                                          {TestEdgeID, _} = TestEdge,
-                                          if
-                                            not  EdgeWeight_ID == TestEdgeID ->
-                                              WantedNodePID ! {reject, Edge};
+              {EdgeWeight_ID, _} = Edge,
+              Kanten_verwaltungPID ! {get_edge, EdgeWeight_ID, self()},
+              receive
+                {edge, WantedEdge} ->
+                  LoggingPID ! {output_receive, "in mainLoop -> test/node_state/node_level/fragment_id/edge_state/test_edge/edge..."},
+                  ok
+              end,
+              {_, WantedNodePID} = WantedEdge,
+              {TestEdgeID, _} = TestEdge,
+              if
+                not  EdgeWeight_ID == TestEdgeID ->
+                  WantedNodePID ! {reject, Edge};
 
-                                          % EdgeWeight_ID ==  TestEdgeID
-                                            true ->
-                                              test(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
-                                          end
-                                      end
-                                  end
-                              end
-                          end
-                      end
-
-                  end
-
+              % EdgeWeight_ID ==  TestEdgeID
+                true ->
+                  test(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
               end
-
           end
       end,
 
 
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID);
 
 
     {accept, Edge} ->
@@ -297,7 +359,7 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
       end,
 
 
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID);
 
 
     {reject, Edge} ->
@@ -314,7 +376,7 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
           end,
           test(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
       end,
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID);
 
     {report, InboundWeight, Edge} ->
       LoggingPID ! {output_receive, "in mainLoop -> report..."},
@@ -385,13 +447,13 @@ mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
 
           end
       end,
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID);
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID);
 
     {changeroot, _} ->
       LoggingPID ! {output_receive, "in mainLoop -> changeroot..."},
       changeroot(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID),
 
-      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
+      mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, WakeUpTimer, LoggingPID)
 
 
   end
@@ -545,6 +607,35 @@ wakeUp(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID) ->
 
   % send conncect other Node behind MinEdge
   NodePID ! {connect, 0, {EdgeWeight_ID, NodePID}},
-  LoggingPID ! {send_connect_to, NodePID},
-  mainLoop(Knoten_zustandPID, Kanten_verwaltungPID, LoggingPID)
+  LoggingPID ! {send_connect_to, NodePID}
+.
+
+
+
+
+% gets the PID for every service
+setUpEdgeList([], EdgeListRecord) ->
+  EdgeListRecord;
+
+setUpEdgeList([{EdgeName, ServiceName} | Tail], EdgeListRecord) ->
+
+  %LoggingPID ! {output, atom_to_list(ServiceName)},
+  NodePID = global:whereis_name(ServiceName),
+
+  timer:sleep(1000),
+  %LoggingPID ! {output, pid_to_list(NodePID)},
+ %LoggingPID ! {output, integer_to_list(EdgeName)},
+
+
+
+  Edge = #edge {
+    weight_id = EdgeName,
+    node_pid = NodePID,
+    state = basic
+  },
+
+  NewEdgeListRecord = [Edge | EdgeListRecord],
+
+
+  setUpEdgeList(Tail, NewEdgeListRecord)
 .

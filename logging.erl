@@ -27,7 +27,8 @@ mainLoop(LogFileName, Counter) ->
     {pid, [ServiceName, PID]} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", ServiceName, ": ", pid_to_list(PID), "\n"]));
     {output, Output} -> logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, "\n"]));
-    {output_2_string_args, Output, Output2} -> logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, " ", Output2,  "\n"]));
+    {output_2_string_args, Output, Output2} ->
+      logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, " ", Output2, "\n"]));
     {output_atom, Output, Atom} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, " ", atom_to_list(Atom), "\n"]));
     {output_pid, Output, PID} ->

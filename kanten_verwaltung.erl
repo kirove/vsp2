@@ -17,31 +17,9 @@
 
 
 start_kanten_verwaltung(LoggingPID) ->
-  LoggingPID ! {output, "Kantenverwaltung: Starte Kanten Verwaltung..."},
 
 
-  % Read out the config file
-  {ok, ConfigListe} = file:consult("node.cfg"),
-  %{ok, NodeEnvironmentList} = get_config_value(nodeEnvironmentList, ConfigListe),
-  {ok, EdgeList} = get_config_value(edgeList, ConfigListe),
-  {ok, NodeEnvironmentList} = file:consult("hosts"),
 
-  % ping all NodeHosts
-  SuccessfullyPingedHostList = net_adm:world_list(NodeEnvironmentList),
-
-  LoggingPID ! {list, "NodeEnvironmentList", NodeEnvironmentList},
-  LoggingPID ! {list, "SuccessfullyPingedHostList", SuccessfullyPingedHostList},
-
-
-  % setUp EdgeList,  new NewEdgeList contains NodePID now
-  timer:sleep(3000),
-  NewEdgeList = setUpEdgeList(EdgeList, [], LoggingPID),
-  InBranchEdge = undifined,
-  BestEdge = undifined,
-  BestWeight = undifined,
-  TestEdge = undefined,
-
-  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
   % start mainLoop
   mainLoop(NewEdgeList, InBranchEdge, BestEdge, BestWeight, TestEdge, LoggingPID).
@@ -175,20 +153,5 @@ getMinEdge([{EdgeId, NodePID, State}| Tail], {LowestEdgeId, NodePIDofLowestEdge,
 .
 
 
-% gets the PID for every service
-setUpEdgeList([], NewEdgeList, LoggingPID) ->
-  NewEdgeList;
 
-setUpEdgeList([{EdgeName, ServiceName} | Tail], NewEdgeList, LoggingPID) ->
-
-  LoggingPID ! {output, atom_to_list(ServiceName)},
-  NodePID = global:whereis_name(ServiceName),
-
-  timer:sleep(1000),
-  LoggingPID ! {output, pid_to_list(NodePID)},
-  LoggingPID ! {output, integer_to_list(EdgeName)},
-
-
-  setUpEdgeList(Tail, [{EdgeName, NodePID, basic}| NewEdgeList], LoggingPID)
-.
 
