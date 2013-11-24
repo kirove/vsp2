@@ -20,7 +20,7 @@
 %% Getting the minEdge out of a list of records
 getMinEdge([]) ->
   {undefined, undefined};
-  
+
 % startcall with only one list as an argument
 getMinEdge([EdgeListRecord| Tail]) ->
   getMinEdge(Tail, EdgeListRecord).
@@ -46,19 +46,19 @@ getMinEdge([EdgeRecord| Tail], LowestEdgeRecord) ->
 change_edge_state(EdgeRecordList, EdgeRecordToChange, State) ->
   change_edge_state(EdgeRecordList, [], EdgeRecordToChange, State)
 .
-change_edge_state([],_,  _, _) ->
+change_edge_state([], _, _, _) ->
   erlang:error("Error in utilities:change_edge_state, no such element in list")
 ;
 change_edge_state([EdgeRecord| Tail], UpdatedEdgeList, EdgeRecordToChange, State) ->
-	if
-		(EdgeRecord#edge.weight_id == EdgeRecordToChange#edge.weight_id) ->
-		  %found elem, updating...
-				NewEdgeRecord = EdgeRecord#edge{ state = State },
-    [ Tail | [NewEdgeRecord | UpdatedEdgeList ]];
-   % didn't find elem
+  if
+    (EdgeRecord#edge.weight_id == EdgeRecordToChange#edge.weight_id) ->
+      %found elem, updating...
+      NewEdgeRecord = EdgeRecord#edge{state = State},
+      [Tail | [NewEdgeRecord | UpdatedEdgeList]];
+  % didn't find elem
     true ->
-		change_edge_state(Tail, [EdgeRecord | UpdatedEdgeList], EdgeRecordToChange, State)
-	end
+      change_edge_state(Tail, [EdgeRecord | UpdatedEdgeList], EdgeRecordToChange, State)
+  end
 
 .
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -68,34 +68,35 @@ change_edge_state([EdgeRecord| Tail], UpdatedEdgeList, EdgeRecordToChange, State
 setUpEdgeList([], EdgeListRecord) ->
   EdgeListRecord;
 
-setUpEdgeList([{EdgeName, ServiceName} | Tail], EdgeListRecord) ->
+setUpEdgeList([{EdgeName, ServiceName} | Tail], EdgeRecordList) ->
 
   NodePID = global:whereis_name(ServiceName),
   timer:sleep(1000),
 
-  Edge = #edge {
+  Edge = #edge{
     weight_id = EdgeName,
     node_pid = NodePID,
     state = basic
   },
 
-  NewEdgeListRecord = [Edge | EdgeListRecord],
-  setUpEdgeList(Tail, NewEdgeListRecord)
+  NewEdgeRecordList = [Edge | EdgeRecordList],
+  setUpEdgeList(Tail, NewEdgeRecordList)
 .
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Get edgeRecord from EdgeList
 get_edge([], _) ->
-	edge_not_found
+  edge_not_found
 ;
-get_edge([EdgeListRecord| Tail], RecordToFind) ->
-	if
-		EdgeListRecord#edge.weight_id == RecordToFind#edge.weight_id ->
-			EdgeListRecord;
-	true ->
-		get_edge(Tail, RecordToFind)
-	end
+get_edge([EdgeRecord| Tail], EdgeRecordToFind) ->
+  if
+    EdgeRecord#edge.weight_id == EdgeRecordToFind#edge.weight_id ->
+      EdgeRecord;
+  %   EdgeRecord#edge.weight_id != EdgeRecordToFind#edge.weight_id
+    true ->
+      get_edge(Tail, EdgeRecordToFind)
+  end
 .
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -104,69 +105,71 @@ get_edge([EdgeListRecord| Tail], RecordToFind) ->
 %% Get all branch Edges excluding the given Edge
 
 %% add 1 Parameter to the Head of the Procedure
-get_branch_edges_without(EdgesList, ExcludedEdge) ->
-	get_branch_edges_without(EdgesList, ExcludedEdge, [])
+get_branch_edges_without(EdgeRecordList, ExcludedEdgeRecord) ->
+  get_branch_edges_without(EdgeRecordList, ExcludedEdgeRecord, [])
 .
 
 get_branch_edges_without([], _, ResultList) ->
-	ResultList
+  ResultList
 ;
-get_branch_edges_without([EdgeListRecord| Tail], ExcludedEdge, ResultList) ->
-	if
-		EdgeListRecord#edge.state == branch ->
-			if not
-				EdgeListRecord#edge.weight_id == ExcludedEdge#edge.weight_id ->
-						NewResultList = [ EdgeListRecord | ResultList],
-						get_branch_edges_without(Tail, ExcludedEdge, NewResultList);
-				true->
-					get_branch_edges_without(Tail, ExcludedEdge, ResultList)
-			end;
-		%% EdgeState != branch	
-		true ->
-			get_branch_edges_without(Tail, ExcludedEdge, ResultList)
-	end		
+get_branch_edges_without([EdgeRecord| Tail], ExcludedEdgeRecord, ResultList) ->
+  if
+    EdgeRecord#edge.state == branch ->
+      if not
+      EdgeRecord#edge.weight_id == ExcludedEdgeRecord#edge.weight_id ->
+        NewResultList = [EdgeRecord | ResultList],
+        get_branch_edges_without(Tail, ExcludedEdgeRecord, NewResultList);
+
+      %% EdgeRecord#edge.weight_id == ExcludedEdgeRecord#edge.weight_id
+        true ->
+          get_branch_edges_without(Tail, ExcludedEdgeRecord, ResultList)
+      end;
+  %% EdgeState != branch
+    true ->
+      get_branch_edges_without(Tail, ExcludedEdgeRecord, ResultList)
+  end
 .
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Get all Basic Edges 
 get_all_basic_edges([], ResultList) ->
-	ResultList
+  ResultList
 ;
-get_all_basic_edges([EdgeListRecord| Tail], ResultList) ->
-	if
-		EdgeListRecord#edge.state == basic ->
-			NewResultList = [ EdgeListRecord | ResultList],
-			get_all_basic_edges(Tail, NewResultList);
-			%% Edge != basic
-		true->
-			ok
-	end	
-.	
+get_all_basic_edges([EdgeRecord| Tail], ResultList) ->
+  if
+    EdgeRecord#edge.state == basic ->
+      NewResultList = [EdgeRecord | ResultList],
+      get_all_basic_edges(Tail, NewResultList);
+  %% Edge != basic
+    true ->
+      get_all_basic_edges(Tail, ResultList)
+  end
+.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Get the Min Basic Edge 
-get_min_basic_edge(EdgesList) ->
-	
-	AllBasicEdges = get_all_basic_edges(EdgesList, []),
-	MinEdge = getMinEdge(AllBasicEdges),
-	
-	%% Return MinEdge
-	MinEdge
-.			
+get_min_basic_edge(EdgesRecordList) ->
+
+  AllBasicEdges = get_all_basic_edges(EdgesRecordList, []),
+  MinEdge = getMinEdge(AllBasicEdges),
+
+  %% Return MinEdge
+  MinEdge
+.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Check if two Edges are Equal
 %% Edges are Equal when they have the same Weight and the same NodePID ..NOT State			
-proveEqual(Edge1, Edge2 )->
+proveEqual(Edge1, Edge2) ->
   if
     (Edge1 == undefined) or (Edge2 == undefined) ->
       false;
     true ->
       (Edge1#edge.weight_id == Edge2#edge.weight_id)
-      and (Edge1#edge.node_pid == Edge2#edge.node_pid)
+        and (Edge1#edge.node_pid == Edge2#edge.node_pid)
   end
 .		
 			
