@@ -19,23 +19,27 @@
 
 %% Getting the minEdge out of a list of records
 getMinEdge([]) ->
-  {undefined, undefined};
+  Edge = #edge{
+    weight_id = undefined,
+    node_pid = undefined,
+    state = undefined
+  };
 
 % startcall with only one list as an argument
 getMinEdge([EdgeListRecord| Tail]) ->
   getMinEdge(Tail, EdgeListRecord).
 
-getMinEdge([], LowestEdgeListRecord) ->
-  LowestEdgeListRecord;
+getMinEdge([], LowestWeightEdgeRecord) ->
+  LowestWeightEdgeRecord;
 
 % main recursion
-getMinEdge([EdgeRecord| Tail], LowestEdgeRecord) ->
+getMinEdge([EdgeRecord| Tail], LowestWeightEdgeRecord) ->
   if
-    EdgeRecord#edge.weight_id < LowestEdgeRecord#edge.weight_id ->
+    EdgeRecord#edge.weight_id < LowestWeightEdgeRecord#edge.weight_id ->
       getMinEdge(Tail, EdgeRecord);
   %#edge.weight_id >=  #LowestEdge.weight_id: no smaller id found, no change needed,
     true ->
-      getMinEdge(Tail, LowestEdgeRecord)
+      getMinEdge(Tail, LowestWeightEdgeRecord)
   end
 .
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -98,6 +98,7 @@ start() ->
     test_edge = undefined
   },
 
+
   % start mainLoop
   mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID)
 .
@@ -115,6 +116,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
       % wakeup muss aufgerufen werden wenn knoten noch am schlafen ist
         NodeStates#node.state == sleeping ->
           {NewNodeStates, NewEdgeManagement} = wakeUp(NodeStates, EdgeManagement, LoggingPID),
+
           mainLoop(NewNodeStates, NewEdgeManagement, WakeUpTimer, LoggingPID);
       % Nodestate != sleeping
         true ->
@@ -145,6 +147,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
           EdgesList = utilities:change_edge_state(NewEdgeManagement#edge_management.edge_list, InboundEdge, branch),
           NewEdgeManagementV2 = NewEdgeManagement#edge_management{edge_list = EdgesList},
 
+          LoggingPID ! {output_send_to_node, "initiate auf (in connect1)", Edge#edge.node_pid} ,
           %% send Initiate Message
           Edge#edge.node_pid ! {initiate, NewNodeStates#node.level, NewNodeStates#node.fragment_id, NewNodeStates#node.state, Edge},
           if
@@ -158,9 +161,11 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 
           if
             Edge#edge.state == basic ->
-              self() ! {connect, InboundLevel, Edge};
+              LoggingPID ! {output_send_to_node, "requeing connect (in connect)", self()} ,
+              self() ! {connect, InboundLevel, InboundEdge};
           % EdgeState != basic
             true ->
+              LoggingPID ! {output_send_to_node, "initiate (in connect2)", Edge#edge.node_pid} ,
               Edge#edge.node_pid ! {initiate, NewNodeStates#node.level + 1, Edge#edge.weight_id, find, Edge}
           end,
           NewNodeStatesV2 = NewNodeStates,
@@ -188,14 +193,13 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
       NewEdgeManagement = EdgeManagement#edge_management{
         in_branch_edge = Edge,
         best_edge = undefined,
-        best_weight = infinity,
-        test_edge = undefined
+        best_weight = infinity
       },
 
 
       BranchListWithoutUnwantedEdge = utilities:get_branch_edges_without(NewEdgeManagement#edge_management.edge_list, Edge),
 
-      NewNodeStatesV2 = recursiveForEach(BranchListWithoutUnwantedEdge, NewNodeStates, InboundNodeLevel, InboundFragmentId, InboundState),
+      NewNodeStatesV2 = recursiveForEachForInitiate(BranchListWithoutUnwantedEdge, NewNodeStates, InboundNodeLevel, InboundFragmentId, InboundState, LoggingPID),
 
       if
         InboundState == find ->
@@ -229,7 +233,8 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 
       if
         InboundLevel > NewNodeStates#node.level ->
-          self() ! {test, InboundLevel, InboundFragmentID, Edge},
+          LoggingPID ! {output_send_to_node, "requeing test (in test)", self()} ,
+          self() ! {test, InboundLevel, InboundFragmentID, InboundEdge},
           NewNodeStatesV2 = NewNodeStates,
           NewEdgeManagementV3 = NewEdgeManagement;
 
@@ -237,6 +242,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
         true ->
           if
             not InboundFragmentID == NewNodeStates#node.fragment_id ->
+              LoggingPID ! {output_send_to_node, "accept (in test)", Edge#edge.node_pid} ,
               Edge#edge.node_pid ! {accept, Edge},
               NewNodeStatesV2 = NewNodeStates,
               NewEdgeManagementV3 = NewEdgeManagement;
@@ -254,6 +260,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
               TestEdge = NewEdgeManagementV2#edge_management.test_edge,
               if
                 not  Edge#edge.weight_id == TestEdge#edge.weight_id ->
+                  LoggingPID ! {output_send_to_node, "reject (in test)", Edge#edge.node_pid} ,
                   Edge#edge.node_pid ! {reject, Edge},
                   NewNodeStatesV2 = NewNodeStates,
                   NewEdgeManagementV3 = NewEdgeManagementV2;
@@ -348,7 +355,8 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
         true ->
           if
             NodeStates#node.state == find ->
-              self() ! {report, InboundWeight, Edge},
+              LoggingPID ! {output_send_to_node, "requeueing report (in report)", self()} ,
+              self() ! {report, InboundWeight, InboundEdge},
               NewEdgeManagement = EdgeManagement;
           %NodeState != find
             true ->
@@ -364,7 +372,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 
                       NewEdgeManagement = EdgeManagement,
 
-                    haltNow(LoggingPID);
+                    haltNow(NodeStates#node.name, EdgeManagement#edge_management.in_branch_edge#edge.weight_id ,LoggingPID);
 
 
                   %% IsInboundWeightInfinite or BestWeight != infinity
@@ -392,16 +400,17 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 .
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%Help Functiones%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%Help Functions%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-recursiveForEach([], NodeStates, _, _, _) ->
+recursiveForEachForInitiate([], NodeStates, _, _, _, _) ->
   NodeStates
 ;
 
-recursiveForEach([EdgeRecord| Tail], NodeStates, InboundNodeLevel, InboundFragmentId, InboundState) ->
+recursiveForEachForInitiate([EdgeRecord| Tail], NodeStates, InboundNodeLevel, InboundFragmentId, InboundState, LoggingPID) ->
 
+  LoggingPID ! {output_send_to_node, "initiate (in recursiveForEach() )", EdgeRecord#edge.node_pid} ,
   EdgeRecord#edge.node_pid ! {initiate, InboundNodeLevel, InboundFragmentId, InboundState, EdgeRecord},
 
   if
@@ -412,7 +421,7 @@ recursiveForEach([EdgeRecord| Tail], NodeStates, InboundNodeLevel, InboundFragme
       NewNodeStates = NodeStates
   end,
 
-  recursiveForEach(Tail, NewNodeStates, InboundNodeLevel, InboundFragmentId, InboundState)
+  recursiveForEachForInitiate(Tail, NewNodeStates, InboundNodeLevel, InboundFragmentId, InboundState, LoggingPID)
 .
 
 
@@ -433,8 +442,9 @@ wakeUp(NodeStates, EdgeManagement, LoggingPID) ->
   },
 
   % send connect other Node behind MinEdge
+  LoggingPID ! {output_send_to_node, "connect (in wakeUp() )", MinEdge#edge.node_pid} ,
   MinEdge#edge.node_pid ! {connect, 0, MinEdge},
-  LoggingPID ! {send_connect_to, MinEdge#edge.node_pid},
+
   {NewNodeStates, NewEdgeManagement}
 .
 
@@ -446,11 +456,13 @@ changeroot(NodeStates, EdgeManagement, LoggingPID) ->
 
   if
     BestEdge#edge.state == branch ->
+      LoggingPID ! {output_send_to_node, "changeroot (in changeroot() )",BestEdge#edge.node_pid} ,
       BestEdge#edge.node_pid ! {changeroot, BestEdge},
       NewEdgeManagement = EdgeManagement;
 
   %  BestEdgeState == branch
     true ->
+      LoggingPID ! {output_send_to_node, "connect (in changeroot() )",BestEdge#edge.node_pid} ,
       BestEdge#edge.node_pid ! {connect, NodeStates#node.level, BestEdge},
       NewBestEdge = BestEdge#edge{state = branch},
       NewEdgeManagement = EdgeManagement#edge_management{best_edge = NewBestEdge}
@@ -468,6 +480,7 @@ report(NodeStates, EdgeManagement, LoggingPID) ->
           NewNodeStates = NodeStates#node{state = found},
           %% Get InBranchEdge
           InBranchEdge = EdgeManagement#edge_management.in_branch_edge,
+          LoggingPID ! {output_send_to_node, "report (in report() )",InBranchEdge#edge.node_pid } ,
           %% Send Report Message on InBranchEdge
           InBranchEdge#edge.node_pid ! {report, EdgeManagement#edge_management.best_weight, InBranchEdge};
       % TestEdge != undefined
@@ -490,6 +503,8 @@ test(NodeStates, EdgeManagement, LoggingPID) ->
       %% set Test Edge
       NewEdgeManagement = EdgeManagement#edge_management{test_edge = MinBasicEdge},
 
+
+      LoggingPID ! {output_send_to_node, "test (in test() )",MinBasicEdge#edge.node_pid  } ,
       %% send Test Message on MinBasicEdge
       MinBasicEdge#edge.node_pid ! {test, NodeStates#node.level, NodeStates#node.fragment_id, MinBasicEdge},
       NewNodeStates = NodeStates;
@@ -502,7 +517,14 @@ test(NodeStates, EdgeManagement, LoggingPID) ->
   {NewNodeStates, NewEdgeManagement}
 .
 
-haltNow(LoggingPID) ->
+haltNow(NodeID, InBranchOfNodeID, LoggingPID) ->
+  %   Get PrinterPID for output reasons
+
+  PrinterPID = global:whereis_name("printer"),
+  timer:sleep(1000),
+
+  PrinterPID ! {print, NodeID, InBranchOfNodeID} ,
+
   LoggingPID ! {output_functions, "in haltNow()..."},
   exit(LoggingPID, "LoggingPID shutdown"),
   exit(self(), "knoten_logik shutdown")
