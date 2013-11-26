@@ -19,7 +19,7 @@
 
 %% Getting the minEdge out of a list of records
 getMinEdge([]) ->
-  Edge = #edge{
+  #edge{
     weight_id = undefined,
     node_pid = undefined,
     state = undefined
@@ -120,7 +120,7 @@ get_branch_edges_without([EdgeRecord| Tail], ExcludedEdgeRecord, ResultList) ->
   if
     EdgeRecord#edge.state == branch ->
       if not
-      EdgeRecord#edge.weight_id == ExcludedEdgeRecord#edge.weight_id ->
+      (EdgeRecord#edge.weight_id == ExcludedEdgeRecord#edge.weight_id) ->
         NewResultList = [EdgeRecord | ResultList],
         get_branch_edges_without(Tail, ExcludedEdgeRecord, NewResultList);
 

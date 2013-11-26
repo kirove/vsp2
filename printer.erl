@@ -34,12 +34,12 @@ receivePrintMessages(NumberOfNodes, PrintList) ->
   % all nodes did sent their print infos
     NumberOfNodes == 0 ->
 
-file:write_file("/home/me/Desktop/test/src1/MST.txt", PrintList)  ;
+      file:write_file("/home/me/Desktop/test/src1/MST.txt", PrintList);
     true ->
       receive
         {print, NodeID, InBranchOfNodeID} ->
           % NodeID of node that has got the InBranchOfNodeID, OutgoingNodeID of node that has NodeIDs InBranch as out-branch
-          NewPrintList =  lists:append([PrintList, "\n", atom_to_list(NodeID), " In Branch Edge ID: " , integer_to_list(InBranchOfNodeID)]),
+          NewPrintList = lists:append([PrintList, "\n", atom_to_list(NodeID), " In Branch Edge ID: ", integer_to_list(InBranchOfNodeID)]),
           receivePrintMessages(NumberOfNodes - 1, NewPrintList)
       end
 
@@ -48,7 +48,6 @@ file:write_file("/home/me/Desktop/test/src1/MST.txt", PrintList)  ;
 
 
 .
-
 
 
 %% buildPrintString([]) ->

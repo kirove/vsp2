@@ -36,6 +36,8 @@ mainLoop(LogFileName, Counter) ->
     {output_knoten, Output} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "=====KN ", Output, "\n"]));
     {output_receive, Output} -> logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, "\n"]));
+    {received_msg_on_edge, Output, EdgeID} ->
+      logging(LogFileName, lists:append([integer_to_list(Counter), "receive: ", Output, " empfangen über Edge ", integer_to_list(EdgeID), "\n"]));
     {output_functions, Output} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "*****FU ", Output, "\n"]));
     {output_kanten_verwaltung, Output} ->
@@ -46,8 +48,8 @@ mainLoop(LogFileName, Counter) ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "#####KZ ", Output, "\n"]));
     {send_connect_to, PID} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "Sending connect to: ", pid_to_list(PID), "\n"]));
-    {output_send_to_node, Something, PID} ->
-      logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "Sending ", Something, " to ", pid_to_list(PID), "\n"]));
+    {output_send_to_node, Something, EdgeID} ->
+      logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "Sending ", Something, " on Edge ", integer_to_list(EdgeID), "\n"]));
   % {output_send, Something} -> logging(LogFileName, lists:append(["Sending ", Something, "\n"]));
   % {output_requeue, Something} -> logging(LogFileName, lists:append(["Requeing ", Something, "\n"]));
 
