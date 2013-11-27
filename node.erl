@@ -158,8 +158,8 @@ start() ->
   RandomTimeSeconds = random:uniform(15),
 
   % Start wakeup-Timer for node
-  %{_, WakeUpTimer} = timer:send_after(timer:seconds(RandomTimeSeconds), self(), {wake_up_msg}),
-  {_, WakeUpTimer} = timer:send_after(timer:seconds(RandomTimeSeconds), self(), {}),
+  {_, WakeUpTimer} = timer:send_after(timer:seconds(RandomTimeSeconds), self(), {wake_up_msg}),
+  %{_, WakeUpTimer} = timer:send_after(timer:seconds(RandomTimeSeconds), self(), {}),
 
 
   NodeStates = #node{
@@ -258,7 +258,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 
           if
             Edge#edge.state == basic ->
-              timer:sleep(4000),
+              timer:sleep(2000),
               LoggingPID ! {output_send_to_node, "requeing connect (in connect) #### VON EDGE", InboundEdge#edge.weight_id},
               self() ! {connect, InboundLevel, InboundEdge};
           % EdgeState != basic
@@ -336,7 +336,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 
       if
         InboundLevel > NewNodeStates#node.level ->
-          timer:sleep(4000),
+          timer:sleep(2000),
           LoggingPID ! {output_send_to_node, "requeing test (in test) #### VON EDGE", InboundEdge#edge.weight_id},
           self() ! {test, InboundLevel, InboundFragmentID, InboundEdge},
           FinalNodeStates = NewNodeStates,
@@ -460,7 +460,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
         true ->
           if
             NodeStates#node.state == find ->
-              timer:sleep(4000),
+              timer:sleep(2000),
               LoggingPID ! {output_send_to_node, "requeueing report (in report) #### VON EDGE", InboundEdge#edge.weight_id},
               self() ! {report, InboundWeight, InboundEdge},
               FinalEdgeManagement = EdgeManagement;
@@ -478,7 +478,7 @@ mainLoop(NodeStates, EdgeManagement, WakeUpTimer, LoggingPID) ->
 
                       FinalEdgeManagement = EdgeManagement,
 
-                      LoggingPID ! {output_send_to_node, "in mainLoop -> received report sending halt  to inbranch !!!",  EdgeManagement#edge_management.in_branch_edge#edge.weight_id},
+                      LoggingPID ! {output_send_to_node, "in mainLoop -> received report sending halt  to inbranch !!!", EdgeManagement#edge_management.in_branch_edge#edge.weight_id},
                       EdgeManagement#edge_management.in_branch_edge#edge.node_pid ! {halt},
 
                       haltNow(NodeStates#node.name, EdgeManagement, LoggingPID);
@@ -671,10 +671,8 @@ haltNow(NodeID, EdgeManagement, LoggingPID) ->
   PrinterPID ! {print, NodeID, InBranchOfNodeRecord#edge.weight_id},
 
 
-
-
   LoggingPID ! {output_functions, "#######WILL HIER HALTEN !!!"},
-  timer:sleep(7000),
+  timer:sleep(5000),
   exit(LoggingPID, "LoggingPID shutdown"),
   exit(self(), "knoten_logik shutdown")
 .

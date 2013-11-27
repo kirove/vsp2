@@ -22,7 +22,7 @@ start(NumberOfNodes) ->
 
   global:register_name("printer", self()),
 
-
+  %io:write("Printer started...\n writing to: /home/me/Desktop/test/src1/MST.txt"),
   receivePrintMessages(NumberOfNodes, "MST: ")
 .
 
@@ -35,6 +35,7 @@ receivePrintMessages(NumberOfNodes, PrintList) ->
     NumberOfNodes == 0 ->
 
       file:write_file("/home/me/Desktop/test/src1/MST.txt", PrintList);
+    %io:write("written to /home/me/Desktop/test/src1/MST.txt ...");
     true ->
       receive
         {print, NodeID, InBranchOfNodeID} ->
