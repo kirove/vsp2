@@ -60,9 +60,9 @@ change_edge_state([EdgeRecord| Tail], UpdatedEdgeList, EdgeRecordToChange, State
       NewEdgeRecord = EdgeRecord#edge{state = State},
       %[Tail | [NewEdgeRecord | UpdatedEdgeList]];
       NewListV1 = [NewEdgeRecord | UpdatedEdgeList],
-      NewListV2 =    [Tail | NewListV1],
+      NewListV2 = [Tail | NewListV1],
       NewListV2;
-      % didn't find elem
+  % didn't find elem
     true ->
       change_edge_state(Tail, [EdgeRecord | UpdatedEdgeList], EdgeRecordToChange, State)
   end
@@ -94,7 +94,7 @@ setUpEdgeList([{EdgeName, ServiceName} | Tail], EdgeRecordList) ->
 
 %% Get edgeRecord from EdgeList
 get_edge([], _) ->
-  edge_not_found
+  erlang:error("Error in utilities:get:edge : no such Edge in List!")
 ;
 get_edge([EdgeRecord| Tail], EdgeRecordToFind) ->
   if
@@ -172,7 +172,7 @@ get_min_basic_edge(EdgesRecordList) ->
 %% Edges are Equal when they have the same Weight and the same NodePID ..NOT State			
 proveEqual(Edge1, Edge2) ->
   if
-    (Edge1 == undefined) or (Edge2 == undefined) ->
+    (Edge1#edge.weight_id == undefined) or (Edge2#edge.weight_id == undefined) ->
       false;
     true ->
       (Edge1#edge.weight_id == Edge2#edge.weight_id)
