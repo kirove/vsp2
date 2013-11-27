@@ -26,8 +26,8 @@ getMinEdge([]) ->
   };
 
 % startcall with only one list as an argument
-getMinEdge([EdgeListRecord| Tail]) ->
-  getMinEdge(Tail, EdgeListRecord).
+getMinEdge([EdgeRecord| Tail]) ->
+  getMinEdge(Tail, EdgeRecord).
 
 getMinEdge([], LowestWeightEdgeRecord) ->
   LowestWeightEdgeRecord;
@@ -58,8 +58,11 @@ change_edge_state([EdgeRecord| Tail], UpdatedEdgeList, EdgeRecordToChange, State
     (EdgeRecord#edge.weight_id == EdgeRecordToChange#edge.weight_id) ->
       %found elem, updating...
       NewEdgeRecord = EdgeRecord#edge{state = State},
-      [Tail | [NewEdgeRecord | UpdatedEdgeList]];
-  % didn't find elem
+      %[Tail | [NewEdgeRecord | UpdatedEdgeList]];
+      NewListV1 = [NewEdgeRecord | UpdatedEdgeList],
+      NewListV2 =    [Tail | NewListV1],
+      NewListV2;
+      % didn't find elem
     true ->
       change_edge_state(Tail, [EdgeRecord | UpdatedEdgeList], EdgeRecordToChange, State)
   end
@@ -173,7 +176,6 @@ proveEqual(Edge1, Edge2) ->
       false;
     true ->
       (Edge1#edge.weight_id == Edge2#edge.weight_id)
-        and (Edge1#edge.node_pid == Edge2#edge.node_pid)
   end
 .		
 			

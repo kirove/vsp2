@@ -12,7 +12,7 @@
   edge_list,
   in_branch_edge = undefined,
   best_edge = undefined,
-  best_weight = infinity,
+  best_weight = undefined,
   test_edge = undefined
 }).
 

@@ -33,6 +33,8 @@ mainLoop(LogFileName, Counter) ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, " ", atom_to_list(Atom), "\n"]));
     {output_pid, Output, PID} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, " ", pid_to_list(PID), "\n"]));
+    {output_int, Output, Int} ->
+      logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, " ", integer_to_list(Int), "\n"]));
     {output_knoten, Output} ->
       logging(LogFileName, lists:append([integer_to_list(Counter), ": ", "=====KN ", Output, "\n"]));
     {output_receive, Output} -> logging(LogFileName, lists:append([integer_to_list(Counter), ": ", Output, "\n"]));
